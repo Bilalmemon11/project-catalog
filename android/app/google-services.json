@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "900214896294",
+    "project_id": "smart-merchandiser-b0602",
+    "storage_bucket": "smart-merchandiser-b0602.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:900214896294:android:b06b902b4f406492266667",
+        "android_client_info": {
+          "package_name": "com.example.smart_merchandiser"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeBo0aL1Y7q8-KYTwvnzwW9pyGoHyvsr4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
