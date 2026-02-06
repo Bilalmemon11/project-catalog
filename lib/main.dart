@@ -1,8 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:smart_merchandiser/app/app_state.dart';
 import 'package:smart_merchandiser/firebase_options.dart';
+import 'package:smart_merchandiser/models/user_profile.dart';
 import 'package:smart_merchandiser/screens/catalog_screen.dart';
 import 'package:smart_merchandiser/screens/profile_form_screen.dart';
 import 'package:smart_merchandiser/screens/setup_required_screen.dart';
@@ -123,11 +125,40 @@ class AppRoot extends StatelessWidget {
             if (user == null) {
               return const SignInScreen();
             }
-            final state = AppStateScope.of(context);
-            if (!state.isProfileComplete) {
-              return ProfileFormScreen(user: user);
-            }
-            return const CatalogScreen();
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .snapshots(),
+              builder: (context, profileSnapshot) {
+                if (profileSnapshot.connectionState != ConnectionState.active) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final data = profileSnapshot.data?.data();
+                final profile =
+                    data == null ? null : UserProfile.fromMap(data);
+                final isComplete = profile?.isComplete ?? false;
+
+                final controller = AppStateScope.of(context);
+                if (profile != null &&
+                    (controller.profile == null ||
+                        controller.profile!.storeName != profile.storeName)) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    controller.updateProfile(profile);
+                  });
+                }
+
+                if (!isComplete) {
+                  return ProfileFormScreen(
+                    user: user,
+                    initialProfile: profile,
+                  );
+                }
+                return CatalogScreen(profile: profile);
+              },
+            );
           },
         );
       },

@@ -3,6 +3,8 @@
 *.log
 *.pyc
 *.swp
+.env
+.env.*
 .DS_Store
 .atom/
 .build/
@@ -32,6 +34,10 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+
+# Project local secrets/artifacts
+../info/.env
+../tools/image_map.json
 
 # Symbolication related
 app.*.symbols

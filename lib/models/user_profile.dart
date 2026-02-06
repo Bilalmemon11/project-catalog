@@ -55,4 +55,34 @@ class UserProfile {
       phoneNumber: phoneNumber ?? this.phoneNumber,
     );
   }
+
+  Map<String, dynamic> toMap(String userId) {
+    return {
+      'userId': userId,
+      'distributor': distributor,
+      'storeName': storeName,
+      'equityNumber': equityNumber,
+      'address': address,
+      'city': city,
+      'state': state,
+      'zipCode': zipCode,
+      'email': email,
+      'phoneNumber': phoneNumber,
+      'hasCompletedForm': isComplete,
+    };
+  }
+
+  factory UserProfile.fromMap(Map<String, dynamic> data) {
+    return UserProfile(
+      distributor: (data['distributor'] ?? '').toString(),
+      storeName: (data['storeName'] ?? '').toString(),
+      equityNumber: (data['equityNumber'] ?? '').toString(),
+      address: (data['address'] ?? '').toString(),
+      city: (data['city'] ?? '').toString(),
+      state: (data['state'] ?? '').toString(),
+      zipCode: (data['zipCode'] ?? '').toString(),
+      email: (data['email'] ?? '').toString(),
+      phoneNumber: (data['phoneNumber'] ?? '').toString(),
+    );
+  }
 }

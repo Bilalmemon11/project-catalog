@@ -1,12 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:smart_merchandiser/app/app_state.dart';
 import 'package:smart_merchandiser/models/user_profile.dart';
 
 class ProfileFormScreen extends StatefulWidget {
-  const ProfileFormScreen({super.key, required this.user});
+  const ProfileFormScreen({
+    super.key,
+    required this.user,
+    this.initialProfile,
+  });
 
   final User user;
+  final UserProfile? initialProfile;
 
   @override
   State<ProfileFormScreen> createState() => _ProfileFormScreenState();
@@ -23,6 +29,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   String _distributor = 'AWG';
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -41,12 +48,27 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
   void initState() {
     super.initState();
     _emailController.text = widget.user.email ?? '';
+    final initial = widget.initialProfile;
+    if (initial != null) {
+      _distributor = initial.distributor.isEmpty ? 'AWG' : initial.distributor;
+      _storeNameController.text = initial.storeName;
+      _equityNumberController.text = initial.equityNumber;
+      _addressController.text = initial.address;
+      _cityController.text = initial.city;
+      _stateController.text = initial.state;
+      _zipController.text = initial.zipCode;
+      _emailController.text = initial.email;
+      _phoneController.text = initial.phoneNumber;
+    }
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    setState(() {
+      _saving = true;
+    });
     final profile = UserProfile(
       distributor: _distributor,
       storeName: _storeNameController.text.trim(),
@@ -58,10 +80,35 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
       email: _emailController.text.trim(),
       phoneNumber: _phoneController.text.trim(),
     );
-    AppStateScope.of(context).updateProfile(profile);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile saved.')),
-    );
+    try {
+      final payload = profile.toMap(widget.user.uid)
+        ..addAll({
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      if (widget.initialProfile == null) {
+        payload['createdAt'] = FieldValue.serverTimestamp();
+      }
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.user.uid)
+          .set(payload, SetOptions(merge: true));
+      AppStateScope.of(context).updateProfile(profile);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile saved.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save profile: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
   }
 
   @override
@@ -189,15 +236,21 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _submit,
-                          child: const Text('Save and continue'),
+                          onPressed: _saving ? null : _submit,
+                          child: _saving
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Save and continue'),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Your information is stored locally for Milestone 1.',
+                    'Your information is stored securely in Firestore.',
                   ),
                 ],
               ),
