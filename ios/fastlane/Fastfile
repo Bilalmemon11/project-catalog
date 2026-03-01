@@ -18,8 +18,12 @@ platform :ios do
     end
 
     ENV["MATCH_GIT_BRANCH"] = "main" if ENV["MATCH_GIT_BRANCH"].to_s.strip.empty?
+    match_git_branch = ENV["MATCH_GIT_BRANCH"].to_s.strip
+    match_git_branch = "main" if match_git_branch.empty?
 
-    app_store_connect_api_key(
+    setup_ci if ENV["CI"].to_s.strip == "true"
+
+    api_key = app_store_connect_api_key(
       key_id: ENV["ASC_KEY_ID"],
       issuer_id: ENV["ASC_ISSUER_ID"],
       key_content: ENV["ASC_PRIVATE_KEY"],
@@ -30,6 +34,9 @@ platform :ios do
     sync_code_signing(
       type: "appstore",
       app_identifier: [ENV["APP_IDENTIFIER"]],
+      git_url: ENV.fetch("MATCH_GIT_URL"),
+      git_branch: match_git_branch,
+      api_key: api_key,
       readonly: false
     )
   end
@@ -53,7 +60,12 @@ platform :ios do
     ENV["MATCH_GIT_BRANCH"] = "main" if ENV["MATCH_GIT_BRANCH"].to_s.strip.empty?
 
     app_identifier = ENV["APP_IDENTIFIER"]
+    team_id = ENV["APPLE_TEAM_ID"].to_s.strip
+    match_git_branch = ENV["MATCH_GIT_BRANCH"].to_s.strip
+    match_git_branch = "main" if match_git_branch.empty?
     default_profile_name = "match AppStore #{app_identifier}"
+
+    setup_ci if ENV["CI"].to_s.strip == "true"
 
     api_key = app_store_connect_api_key(
       key_id: ENV["ASC_KEY_ID"],
@@ -69,7 +81,10 @@ platform :ios do
     sync_code_signing(
       type: "appstore",
       app_identifier: [app_identifier],
-      readonly: readonly_match
+      git_url: ENV.fetch("MATCH_GIT_URL"),
+      git_branch: match_git_branch,
+      readonly: readonly_match,
+      api_key: api_key
     )
 
     match_mapping = Actions.lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING] || {}
@@ -85,16 +100,17 @@ platform :ios do
 
     update_project_team(
       path: "Runner.xcodeproj",
-      teamid: ENV["APPLE_TEAM_ID"]
+      teamid: team_id
     )
 
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
-      team_id: ENV["APPLE_TEAM_ID"],
+      team_id: team_id,
       targets: ["Runner"],
       profile_name: profile_name,
-      code_sign_identity: "Apple Distribution"
+      code_sign_identity: "Apple Distribution",
+      bundle_identifier: app_identifier
     )
 
     cocoapods(
@@ -113,11 +129,14 @@ platform :ios do
       scheme: "Runner",
       clean: true,
       export_method: "app-store",
+      export_team_id: team_id,
+      skip_profile_detection: true,
       disable_xcpretty: false,
       buildlog_path: "~/Library/Logs/gym",
       output_directory: "build/ios",
       output_name: "Runner.ipa",
       export_options: {
+        signingStyle: "manual",
         provisioningProfiles: {
           app_identifier => profile_name
         }
