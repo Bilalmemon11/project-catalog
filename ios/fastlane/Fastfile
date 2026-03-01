@@ -1,0 +1,90 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build and upload iOS app to TestFlight"
+  lane :beta do
+    required = %w[
+      APP_IDENTIFIER
+      ASC_KEY_ID
+      ASC_ISSUER_ID
+      ASC_PRIVATE_KEY
+      MATCH_GIT_URL
+      MATCH_PASSWORD
+      APPLE_TEAM_ID
+    ]
+
+    required.each do |key|
+      UI.user_error!("Missing required env var: #{key}") if ENV[key].to_s.strip.empty?
+    end
+
+    ENV["MATCH_GIT_BRANCH"] = "main" if ENV["MATCH_GIT_BRANCH"].to_s.strip.empty?
+
+    app_identifier = ENV["APP_IDENTIFIER"]
+    profile_name = "match AppStore #{app_identifier}"
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_PRIVATE_KEY"],
+      is_key_content_base64: true,
+      duration: 1200
+    )
+
+    sync_code_signing(
+      type: "appstore",
+      app_identifier: [app_identifier],
+      readonly: false
+    )
+
+    unless ENV["GITHUB_RUN_NUMBER"].to_s.strip.empty?
+      increment_build_number(
+        xcodeproj: "Runner.xcodeproj",
+        build_number: ENV["GITHUB_RUN_NUMBER"]
+      )
+    end
+
+    update_project_team(
+      path: "Runner.xcodeproj",
+      teamid: ENV["APPLE_TEAM_ID"]
+    )
+
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "Runner.xcodeproj",
+      team_id: ENV["APPLE_TEAM_ID"],
+      targets: ["Runner"],
+      profile_name: profile_name,
+      code_sign_identity: "Apple Distribution"
+    )
+
+    cocoapods(
+      clean_install: true,
+      silent: false
+    )
+
+    if File.exist?("Podfile.lock") && File.exist?("Pods/Manifest.lock")
+      FileUtils.cp("Podfile.lock", "Pods/Manifest.lock")
+    elsif File.exist?("Pods/Manifest.lock")
+      FileUtils.cp("Pods/Manifest.lock", "Podfile.lock")
+    end
+
+    build_app(
+      workspace: "Runner.xcworkspace",
+      scheme: "Runner",
+      clean: true,
+      export_method: "app-store",
+      output_directory: "build/ios",
+      output_name: "Runner.ipa",
+      export_options: {
+        provisioningProfiles: {
+          app_identifier => profile_name
+        }
+      }
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

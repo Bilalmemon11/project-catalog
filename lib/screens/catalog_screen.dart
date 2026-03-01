@@ -121,20 +121,21 @@ class _DisplaysSection extends StatelessWidget {
               if (snapshot.hasError) {
                 return const Center(child: Text('Failed to load displays.'));
               }
-              final items = snapshot.data?.docs
+              final items =
+                  snapshot.data?.docs
                       .map((doc) => DisplayItem.fromDoc(doc))
                       .toList() ??
                   [];
-              final displayItems =
-                  items.isEmpty ? _placeholderDisplays() : items;
+              final displayItems = items.isEmpty
+                  ? _placeholderDisplays()
+                  : items;
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: displayItems.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final item = displayItems[index];
-                  final imageUrl =
-                      item.images.isEmpty ? '' : item.images.first;
+                  final imageUrl = item.images.isEmpty ? '' : item.images.first;
                   return SizedBox(
                     width: 240,
                     child: Card(
@@ -192,7 +193,82 @@ class _DisplaysSection extends StatelessWidget {
   }
 }
 
-class _ProductsSection extends StatelessWidget {
+class _ProductsSection extends StatefulWidget {
+  @override
+  State<_ProductsSection> createState() => _ProductsSectionState();
+}
+
+class _ProductsSectionState extends State<_ProductsSection> {
+  static const int _pageSize = 10;
+  final List<Product> _products = [];
+
+  // Maps page number to the cursor used to start that page query.
+  // Page 1 starts from the beginning, so its cursor is null.
+  final Map<int, DocumentSnapshot<Map<String, dynamic>>?> _pageCursors = {
+    1: null,
+  };
+
+  int _currentPage = 1;
+  bool _isLoading = false;
+  bool _hasNextPage = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPage(1);
+  }
+
+  Future<void> _loadPage(int page) async {
+    if (_isLoading || page < 1) return;
+    if (!_pageCursors.containsKey(page)) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+          .collection('products')
+          .orderBy('brand')
+          .limit(_pageSize);
+
+      final cursor = _pageCursors[page];
+      if (cursor != null) {
+        query = query.startAfterDocument(cursor);
+      }
+
+      final snapshot = await query.get();
+      final docs = snapshot.docs;
+      final fetchedProducts = docs.map((doc) => Product.fromDoc(doc)).toList();
+      final hasNext = docs.length == _pageSize;
+
+      if (!mounted) return;
+      setState(() {
+        _products
+          ..clear()
+          ..addAll(fetchedProducts);
+        _currentPage = page;
+        _hasNextPage = hasNext;
+
+        if (hasNext && docs.isNotEmpty) {
+          _pageCursors[page + 1] = docs.last;
+        } else {
+          _pageCursors.remove(page + 1);
+        }
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Failed to load products: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -200,60 +276,92 @@ class _ProductsSection extends StatelessWidget {
       children: [
         Text('Products', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
-        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('products')
-              .orderBy('brand')
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.active) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('Failed to load products.'),
+        if (_isLoading)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        if (!_isLoading && _products.isEmpty && _errorMessage == null)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('No products available yet.'),
+          ),
+        if (_errorMessage != null && _products.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_errorMessage!),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => _loadPage(_currentPage),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        if (_products.isNotEmpty)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final crossAxisCount = width >= 1000
+                  ? 4
+                  : width >= 720
+                  ? 3
+                  : width >= 520
+                  ? 2
+                  : 1;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _products.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 0.72,
+                ),
+                itemBuilder: (context, index) {
+                  final product = _products[index];
+                  return _ProductCard(product: product);
+                },
               );
-            }
-            final items = snapshot.data?.docs
-                    .map((doc) => Product.fromDoc(doc))
-                    .toList() ??
-                [];
-            if (items.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No products available yet.'),
-              );
-            }
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final crossAxisCount = width >= 1000
-                    ? 4
-                    : width >= 720
-                        ? 3
-                        : width >= 520
-                            ? 2
-                            : 1;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: items.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 0.72,
-                  ),
-                  itemBuilder: (context, index) {
-                    final product = items[index];
-                    return _ProductCard(product: product);
-                  },
-                );
-              },
-            );
-          },
-        ),
+            },
+          ),
+        if (_products.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Page $_currentPage  •  ${_products.length} products shown',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: _currentPage > 1 && !_isLoading
+                    ? () => _loadPage(_currentPage - 1)
+                    : null,
+                child: const Text('Previous'),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: _hasNextPage && !_isLoading
+                    ? () => _loadPage(_currentPage + 1)
+                    : null,
+                child: const Text('Next'),
+              ),
+            ],
+          ),
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _errorMessage!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -280,9 +388,8 @@ class _ProductCard extends StatelessWidget {
                     product.imageUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
-                    errorBuilder: (_, __, ___) => const Center(
-                      child: Icon(Icons.broken_image, size: 48),
-                    ),
+                    errorBuilder: (_, __, ___) =>
+                        const Center(child: Icon(Icons.broken_image, size: 48)),
                   ),
           ),
           Padding(
@@ -305,10 +412,7 @@ class _ProductCard extends StatelessWidget {
                   style: theme.textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'UPC: ${product.upc}',
-                  style: theme.textTheme.bodySmall,
-                ),
+                Text('UPC: ${product.upc}', style: theme.textTheme.bodySmall),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -345,10 +449,7 @@ class _Chip extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.black12),
       ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelSmall,
-      ),
+      child: Text(text, style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }

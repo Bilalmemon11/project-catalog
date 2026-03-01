@@ -41,10 +41,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDdhqEe3SCeBYfStFscrAGdhfvPc2ErC10',
-    appId: '1:900214896294:ios:062e4e86f5a4b16f266667',
+    appId: '1:900214896294:ios:45bbcc0fe2bfab45266667',
     messagingSenderId: '900214896294',
     projectId: 'smart-merchandiser-b0602',
     storageBucket: 'smart-merchandiser-b0602.firebasestorage.app',
-    iosBundleId: 'com.example.smartMerchandiser',
+    iosBundleId: 'com.merchandiser.smart',
   );
+
 }

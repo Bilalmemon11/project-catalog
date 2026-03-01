@@ -1,0 +1,126 @@
+name: iOS TestFlight CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - "lib/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/mobile-ci.yml"
+
+concurrency:
+  group: ios-testflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-testflight:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Preflight required secrets
+        env:
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          required_vars=(
+            APP_IDENTIFIER
+            ASC_KEY_ID
+            ASC_ISSUER_ID
+            ASC_PRIVATE_KEY
+            MATCH_GIT_URL
+            MATCH_PASSWORD
+            APPLE_TEAM_ID
+          )
+
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "Missing required secret: $var"
+              exit 1
+            fi
+          done
+
+          if echo "$ASC_PRIVATE_KEY" | base64 --decode >/dev/null 2>&1; then
+            echo "ASC_PRIVATE_KEY base64 format looks valid."
+          elif echo "$ASC_PRIVATE_KEY" | base64 -D >/dev/null 2>&1; then
+            echo "ASC_PRIVATE_KEY base64 format looks valid."
+          else
+            echo "ASC_PRIVATE_KEY is not valid base64."
+            exit 1
+          fi
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Set up Ruby 3.2
+        uses: ruby/setup-ruby@v1
+        env:
+          BUNDLE_GEMFILE: ios/Gemfile
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Configure Git auth for match repo
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_PAT: ${{ secrets.MATCH_GIT_PAT }}
+          MATCH_GIT_USERNAME: ${{ secrets.MATCH_GIT_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${MATCH_GIT_PAT:-}" ] && [[ "${MATCH_GIT_URL:-}" == https://github.com/* ]]; then
+            git_user="${MATCH_GIT_USERNAME:-git}"
+            git config --global url."https://${git_user}:${MATCH_GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Run Fastlane beta lane
+        working-directory: ios
+        env:
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_GIT_BRANCH: ${{ secrets.MATCH_GIT_BRANCH }}
+          MATCH_GIT_PAT: ${{ secrets.MATCH_GIT_PAT }}
+          MATCH_GIT_USERNAME: ${{ secrets.MATCH_GIT_USERNAME }}
+        run: bundle exec fastlane ios beta --verbose
+
+      - name: Dump iOS build logs on failure
+        if: failure()
+        run: |
+          set +e
+          echo "===== ~/Library/Logs/gym ====="
+          ls -la ~/Library/Logs/gym || true
+          for f in ~/Library/Logs/gym/*.log; do
+            [ -f "$f" ] || continue
+            echo "----- $f -----"
+            tail -n 200 "$f" || true
+          done

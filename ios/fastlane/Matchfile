@@ -1,0 +1,11 @@
+git_url(ENV.fetch("MATCH_GIT_URL"))
+storage_mode("git")
+type("appstore")
+app_identifier([ENV.fetch("APP_IDENTIFIER")])
+readonly(false)
+git_branch(ENV["MATCH_GIT_BRANCH"].to_s.strip.empty? ? "main" : ENV["MATCH_GIT_BRANCH"])
+
+unless ENV["MATCH_GIT_PAT"].to_s.strip.empty?
+  git_user = ENV["MATCH_GIT_USERNAME"].to_s.strip.empty? ? "git" : ENV["MATCH_GIT_USERNAME"]
+  git_basic_authorization(Base64.strict_encode64("#{git_user}:#{ENV['MATCH_GIT_PAT']}"))
+end
