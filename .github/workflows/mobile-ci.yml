@@ -119,6 +119,12 @@ jobs:
           set +e
           echo "===== ~/Library/Logs/gym ====="
           ls -la ~/Library/Logs/gym || true
+          echo "===== First xcodebuild errors (if any) ====="
+          for f in ~/Library/Logs/gym/*.log; do
+            [ -f "$f" ] || continue
+            echo "----- $f (first 20 error lines) -----"
+            grep -n " error: " "$f" | head -n 20 || true
+          done
           for f in ~/Library/Logs/gym/*.log; do
             [ -f "$f" ] || continue
             echo "----- $f -----"
