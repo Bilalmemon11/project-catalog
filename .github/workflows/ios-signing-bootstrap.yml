@@ -1,0 +1,80 @@
+name: iOS Signing Bootstrap
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bootstrap-signing:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Preflight required secrets
+        env:
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          required_vars=(
+            APP_IDENTIFIER
+            ASC_KEY_ID
+            ASC_ISSUER_ID
+            ASC_PRIVATE_KEY
+            MATCH_GIT_URL
+            MATCH_PASSWORD
+            APPLE_TEAM_ID
+          )
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "Missing required secret: $var"
+              exit 1
+            fi
+          done
+
+      - name: Set up Ruby 3.2
+        uses: ruby/setup-ruby@v1
+        env:
+          BUNDLE_GEMFILE: ios/Gemfile
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Configure Git auth for match repo
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_PAT: ${{ secrets.MATCH_GIT_PAT }}
+          MATCH_GIT_USERNAME: ${{ secrets.MATCH_GIT_USERNAME }}
+        run: |
+          set -euo pipefail
+          if [ -n "${MATCH_GIT_PAT:-}" ] && [[ "${MATCH_GIT_URL:-}" == https://github.com/* ]]; then
+            git_user="${MATCH_GIT_USERNAME:-git}"
+            git config --global url."https://${git_user}:${MATCH_GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          fi
+
+      - name: Bootstrap signing assets in match repo
+        working-directory: ios
+        env:
+          APP_IDENTIFIER: ${{ secrets.APP_IDENTIFIER }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MATCH_GIT_BRANCH: ${{ secrets.MATCH_GIT_BRANCH }}
+          MATCH_GIT_PAT: ${{ secrets.MATCH_GIT_PAT }}
+          MATCH_GIT_USERNAME: ${{ secrets.MATCH_GIT_USERNAME }}
+        run: bundle exec fastlane ios bootstrap_signing --verbose
