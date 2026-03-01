@@ -73,6 +73,8 @@ platform :ios do
       scheme: "Runner",
       clean: true,
       export_method: "app-store",
+      disable_xcpretty: true,
+      buildlog_path: "~/Library/Logs/gym",
       output_directory: "build/ios",
       output_name: "Runner.ipa",
       export_options: {
