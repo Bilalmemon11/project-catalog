@@ -111,6 +111,7 @@ jobs:
           MATCH_GIT_BRANCH: ${{ secrets.MATCH_GIT_BRANCH }}
           MATCH_GIT_PAT: ${{ secrets.MATCH_GIT_PAT }}
           MATCH_GIT_USERNAME: ${{ secrets.MATCH_GIT_USERNAME }}
+          MATCH_READONLY: "true"
         run: bundle exec fastlane ios beta --verbose
 
       - name: Dump iOS build logs on failure

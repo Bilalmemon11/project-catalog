@@ -30,10 +30,13 @@ platform :ios do
       duration: 1200
     )
 
+    # In CI we should only fetch existing signing assets, not create new certs.
+    readonly_match = ENV["MATCH_READONLY"].to_s.strip.empty? ? true : ENV["MATCH_READONLY"] == "true"
+
     sync_code_signing(
       type: "appstore",
       app_identifier: [app_identifier],
-      readonly: false
+      readonly: readonly_match
     )
 
     unless ENV["GITHUB_RUN_NUMBER"].to_s.strip.empty?
