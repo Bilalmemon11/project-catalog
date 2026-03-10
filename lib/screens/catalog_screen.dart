@@ -375,6 +375,7 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final imageUrls = product.imageUrls;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -382,15 +383,10 @@ class _ProductCard extends StatelessWidget {
         children: [
           AspectRatio(
             aspectRatio: 1.1,
-            child: product.imageUrl.isEmpty
-                ? const Center(child: Icon(Icons.photo, size: 48))
-                : Image.network(
-                    product.imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    errorBuilder: (_, __, ___) =>
-                        const Center(child: Icon(Icons.broken_image, size: 48)),
-                  ),
+            child: _ProductImageGallery(
+              productName: product.description,
+              imageUrls: imageUrls,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(12),
@@ -413,6 +409,13 @@ class _ProductCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text('UPC: ${product.upc}', style: theme.textTheme.bodySmall),
+                if (product.imageKey.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Image key: ${product.imageKey}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -427,6 +430,259 @@ class _ProductCard extends StatelessWidget {
                   ],
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductImageGallery extends StatefulWidget {
+  const _ProductImageGallery({
+    required this.productName,
+    required this.imageUrls,
+  });
+
+  final String productName;
+  final List<String> imageUrls;
+
+  @override
+  State<_ProductImageGallery> createState() => _ProductImageGalleryState();
+}
+
+class _ProductImageGalleryState extends State<_ProductImageGallery> {
+  late final PageController _pageController;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _openGallery(BuildContext context) {
+    if (widget.imageUrls.isEmpty) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _FullscreenGallery(
+          title: widget.productName,
+          imageUrls: widget.imageUrls,
+          initialIndex: _currentIndex,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.imageUrls.isEmpty) {
+      return const _ImageFrame(
+        child: Icon(Icons.photo, size: 48),
+      );
+    }
+
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          itemCount: widget.imageUrls.length,
+          onPageChanged: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          itemBuilder: (context, index) {
+            return GestureDetector(
+              onTap: () => _openGallery(context),
+              child: _NetworkProductImage(
+                imageUrl: widget.imageUrls[index],
+                semanticsLabel: '${widget.productName} image ${index + 1}',
+              ),
+            );
+          },
+        ),
+        if (widget.imageUrls.length > 1)
+          Positioned(
+            right: 10,
+            top: 10,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  '${_currentIndex + 1}/${widget.imageUrls.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+        if (widget.imageUrls.length > 1)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 10,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.imageUrls.length, (index) {
+                final isActive = index == _currentIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  height: 8,
+                  width: isActive ? 18 : 8,
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.black87 : Colors.black26,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                );
+              }),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _NetworkProductImage extends StatelessWidget {
+  const _NetworkProductImage({
+    required this.imageUrl,
+    required this.semanticsLabel,
+  });
+
+  final String imageUrl;
+  final String semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ImageFrame(
+      child: Image.network(
+        imageUrl,
+        fit: BoxFit.contain,
+        width: double.infinity,
+        alignment: Alignment.center,
+        semanticLabel: semanticsLabel,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+        },
+        errorBuilder: (_, __, ___) =>
+            const Center(child: Icon(Icons.broken_image, size: 48)),
+      ),
+    );
+  }
+}
+
+class _ImageFrame extends StatelessWidget {
+  const _ImageFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFF4F4F2),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _FullscreenGallery extends StatefulWidget {
+  const _FullscreenGallery({
+    required this.title,
+    required this.imageUrls,
+    required this.initialIndex,
+  });
+
+  final String title;
+  final List<String> imageUrls;
+  final int initialIndex;
+
+  @override
+  State<_FullscreenGallery> createState() => _FullscreenGalleryState();
+}
+
+class _FullscreenGalleryState extends State<_FullscreenGallery> {
+  late final PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '${_currentIndex + 1}/${widget.imageUrls.length}',
+        ),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(
+              widget.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.imageUrls.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                return ColoredBox(
+                  color: Colors.black,
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 4,
+                    child: Center(
+                      child: Image.network(
+                        widget.imageUrls[index],
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.broken_image,
+                          size: 56,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],

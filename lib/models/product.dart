@@ -11,6 +11,8 @@ class Product {
     required this.bsp,
     required this.srp,
     required this.imageUrl,
+    required this.imageUrls,
+    required this.imageKey,
   });
 
   final String id;
@@ -22,9 +24,26 @@ class Product {
   final dynamic bsp;
   final dynamic srp;
   final String imageUrl;
+  final List<String> imageUrls;
+  final String imageKey;
+
+  String get primaryImageUrl {
+    if (imageUrls.isNotEmpty) return imageUrls.first;
+    return imageUrl;
+  }
 
   factory Product.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const {};
+    final imageUrlsRaw = (data['imageUrls'] as List?) ?? const [];
+    final imageUrls = imageUrlsRaw
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final legacyImageUrl = (data['imageUrl'] ?? '').toString();
+    if (legacyImageUrl.isNotEmpty && !imageUrls.contains(legacyImageUrl)) {
+      imageUrls.insert(0, legacyImageUrl);
+    }
+
     return Product(
       id: doc.id,
       brand: (data['brand'] ?? '').toString(),
@@ -34,7 +53,9 @@ class Product {
       strPack: data['strPack'],
       bsp: data['bsp'],
       srp: data['srp'],
-      imageUrl: (data['imageUrl'] ?? '').toString(),
+      imageUrl: legacyImageUrl,
+      imageUrls: imageUrls,
+      imageKey: (data['imageKey'] ?? '').toString(),
     );
   }
 }
